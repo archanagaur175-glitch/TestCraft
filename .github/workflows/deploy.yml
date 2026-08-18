@@ -34,14 +34,32 @@ jobs:
       - name: Build
         run: npm run build
 
-  deploy:
+  check-secrets:
     needs: build
+    runs-on: ubuntu-latest
+    outputs:
+      have: ${{ steps.check.outputs.have }}
+    steps:
+      - id: check
+        env:
+          TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          ORG: ${{ secrets.VERCEL_ORG_ID }}
+          PROJECT: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          if [ -n "$TOKEN" ] && [ -n "$ORG" ] && [ -n "$PROJECT" ]; then
+            echo "have=true" >> "$GITHUB_OUTPUT"
+            echo "All Vercel secrets present — deploy will run."
+          else
+            echo "have=false" >> "$GITHUB_OUTPUT"
+            echo "Vercel secrets missing (VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID). Deploy skipped; build remains green."
+          fi
+
+  deploy:
+    needs: [build, check-secrets]
     runs-on: ubuntu-latest
     if: |
       github.ref == 'refs/heads/main' &&
-      secrets.VERCEL_TOKEN != '' &&
-      secrets.VERCEL_ORG_ID != '' &&
-      secrets.VERCEL_PROJECT_ID != ''
+      needs.check-secrets.outputs.have == 'true'
     steps:
       - uses: actions/checkout@v4
 
